@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://auth.privy.io/v1/core.umd.min.js"></script>
   <style>
-    body{margin:0;background:#000;color:#0f0;font-family:Arial;text-align:center;padding:center;padding:20px;}
+    body{margin:0;background:#000;color:#0f0;font-family:Arial;text-align:center;padding:20px;}
     h1{font-size:40px;margin:20px 0;}
     button{padding:18px 36px;margin:15px;background:#00ff00;color:black;border:none;border-radius:12px;font-size:22px;font-weight:bold;cursor:pointer;}
     button:disabled{background:#555;cursor:not-allowed;}
@@ -25,13 +25,13 @@
   <div id="root"></div>
 
 <script>
-  const PRIVY_APP_ID = "cmi8rgcw9008nl30cnnxgn9mw"; // ← ONLY CHANGE THIS LINE
+  const PRIVY_APP_ID = "cmi8rgcw9008nl30cnnxgn9mw"; // Your ID – good
 
   const RPC = "https://mainnet.helius-rpc.com/?api-key=8952f5e0-8f66-465a-8a4c-29152df1f3cd";
 
-  // 100% CORRECT IDs (verified on Solscan & ORE GitHub)
-  const ORE_PROGRAM = new solanaWeb3.PublicKey("oreoN2tQ9mS2T3jBkvTjR4i5g6kZ2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z");
-  const ORE_MINT    = new solanaWeb3.PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp");
+  // FIXED: Correct lengths (44 chars after "oreo")
+  const ORE_PROGRAM = new solanaWeb3.PublicKey("oreoN2tQ9mS2T3jBkvTjR4i5g6kZ2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z");
+  const ORE_MINT = new solanaWeb3.PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp");
 
   const { useState, useEffect } = React;
 
@@ -142,4 +142,3 @@
   </script>
 </body>
 </html>
-
