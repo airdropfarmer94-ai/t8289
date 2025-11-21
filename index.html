@@ -2,26 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>ORE Custom Tiles Bot</title>
+  <title>ORE Custom Tiles Bot (v3)</title>
   <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://auth.privy.io/v1/core.umd.min.js"></script>
   <style>
-    body{margin:0;background:#000;color:#0f0;font-family:Arial;text-align:center;padding:20px;}
-    h1{font-size:40px;margin:20px 0;}
-    button{padding:18px 36px;margin:15px;background:#00ff00;color:black;border:none;border-radius:12px;font-size:22px;font-weight:bold;cursor:pointer;}
-    button:disabled{background:#555;cursor:not-allowed;}
-    button.stop{background:#ff0033;}
-    #grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;max-width:420px;margin:40px auto;}
-    .tile{width:70px;height:70px;background:#b8860b;color:white;font-size:28px;font-weight:bold;display:flex;align-items:center;justify-content:center;cursor:pointer;border:4px solid #333;border-radius:12px;}
-    .tile.selected{background:#00ff00;color:black;border-color:#00ff00;box-shadow:0 0 20px #0f0;}
-    .log{background:#111;padding:20px;height:380px;overflow-y:auto;margin:30px auto;max-width:700px;border-radius:12px;font-family:monospace;font-size:15px;border:1px solid #0f0;}
-    input{padding:15px;width:280px;margin:15px;border-radius:12px;background:#222;color:#0f0;border:2px solid #0f0;font-size:18px;text-align:center;}
+    body { margin: 0; background: #000; color: #0f0; font-family: Arial; text-align: center; padding: 20px; }
+    h1 { font-size: 40px; margin: 20px 0; }
+    button { padding: 18px 36px; margin: 15px; background: #00ff00; color: black; border: none; border-radius: 12px; font-size: 22px; font-weight: bold; cursor: pointer; }
+    button:disabled { background: #555; cursor: not-allowed; }
+    button.stop { background: #ff0033; }
+    #grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; max-width: 420px; margin: 40px auto; }
+    .tile { width: 70px; height: 70px; background: #b8860b; color: white; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 4px solid #333; border-radius: 12px; }
+    .tile.selected { background: #00ff00; color: black; border-color: #00ff00; box-shadow: 0 0 20px #0f0; }
+    .log { background: #111; padding: 20px; height: 380px; overflow-y: auto; margin: 30px auto; max-width: 700px; border-radius: 12px; font-family: monospace; font-size: 15px; border: 1px solid #0f0; }
+    input { padding: 15px; width: 280px; margin: 15px; border-radius: 12px; background: #222; color: #0f0; border: 2px solid #0f0; font-size: 18px; text-align: center; }
   </style>
 </head>
 <body>
-  <h1>ORE Custom Tiles Bot</h1>
+  <h1>ORE Custom Tiles Bot (v3)</h1>
   <div id="root"></div>
 
 <script>
@@ -29,7 +29,7 @@
 
   const RPC = "https://mainnet.helius-rpc.com/?api-key=8952f5e0-8f66-465a-8a4c-29152df1f3cd";
 
-  // CORRECT ORE v2 Program ID (from Solscan – 44 chars)
+  // v3 Program ID (from Solscan – 44 chars)
   const ORE_PROGRAM = new solanaWeb3.PublicKey("oreV3EG1i9BEgiAJ8b177Z2S2rMarzak4NMv1kULvWv");
   const ORE_MINT = new solanaWeb3.PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp");
 
@@ -48,9 +48,15 @@
     const logMsg = m => setLog(l=>[...l.slice(-30),`${new Date().toLocaleTimeString()}: ${m}`]);
 
     useEffect(()=>{
+      let attempts = 0;
       const tryInit = () => {
-        if(window.PrivyIO){
-          const privy = new PrivyIO({appId:PRIVY_APP_ID});
+        if(window.PrivyIO && attempts < 10){
+          const privy = new PrivyIO({
+            appId: PRIVY_APP_ID,
+            supportedChains: [{ id: 101, name: "Solana", token: "SOL" }], // Solana mainnet
+            embeddedWallets: { createOnLogin: "all-users" },
+            appearance: { theme: "dark" }
+          });
           privy.on('login', async user=>{
             setWallet(user.wallet);
             logMsg("Connected: "+user.wallet.address.slice(0,8)+"...");
@@ -58,11 +64,26 @@
             const b=await c.getBalance(new solanaWeb3.PublicKey(user.wallet.address));
             setBalance(b/1e9);
           });
-          window.privy=privy;
-        }else setTimeout(tryInit,500);
+          window.privy = privy;
+          logMsg("Privy ready – click SIGN IN");
+        }else if (attempts < 10) {
+          attempts++;
+          setTimeout(tryInit,1000);
+        }else{
+          logMsg("Privy load failed – check console");
+        }
       };
       tryInit();
     },[]);
+
+    const handleLogin = () => {
+      if (window.privy && window.privy.login) {
+        window.privy.login({ chainId: 101 }); // Solana mainnet
+      } else {
+        logMsg("Privy not ready – retrying...");
+        setTimeout(handleLogin, 1000);
+      }
+    };
 
     const toggle=i=>{if(running)return;setTiles(t=>t.includes(i)?t.filter(x=>x!==i):[...t,i].sort((a,b)=>a-b));};
 
@@ -118,7 +139,7 @@
 
     return React.createElement('div',null,
       !wallet ?
-        React.createElement('button',{onClick:()=>window.privy?.login()},"SIGN IN WITH PRIVY") :
+        React.createElement('button',{onClick:handleLogin},"SIGN IN WITH PRIVY") :
         React.createElement(React.Fragment,null,
           React.createElement('p',null,`Balance: ${balance.toFixed(4)} SOL`),
           React.createElement('div',{id:'grid'},
@@ -142,8 +163,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
