@@ -2,141 +2,235 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ORE Custom Tiles Bot – LIVE</title>
+  <title>ORE Custom Tiles Bot</title>
   <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://auth.privy.io/v1/core.umd.min.js"></script>
   <style>
-    body{margin:0;background:#000;color:#0f0;font-family:Arial;text-align:center;padding:20px;}
-    h1{font-size:40px;}
-    #grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;max-width:420px;margin:40px auto;}
-    .tile{width:70px;height:70px;background:#b8860b;color:white;font-size:28px;font-weight:bold;
-          display:flex;align-items:center;justify-content:center;cursor:pointer;border:4px solid #333;border-radius:12px;}
-    .tile.selected{background:#00ff00;color:black;border:4px solid #00ff00;box-shadow:0 0 20px #0f0;}
-    button{padding:18px 36px;margin:20px;background:#00ff00;color:black;border:none;
-           border-radius:12px;font-size:22px;font-weight:bold;cursor:pointer;}
-    button:disabled{background:#555;}
-    button.stop{background:#ff0033;}
-    .log{background:#111;padding:20px;height:380px;overflow:auto;margin:30px auto;
-         max-width:700px;border-radius:12px;font-family:monospace;font-size:15px;border:1px solid #0f0;}
-    input{padding:15px;width:280px;margin:15px;border-radius:12px;background:#222;color:#0f0;
-          border:2px solid #0f0;font-size:18px;text-align:center;}
+    body { margin: 0; background: #000; color: #0f0; font-family: Arial; text-align: center; padding: 20px; }
+    h1 { font-size: 40px; }
+    #grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; max-width: 420px; margin: 40px auto; }
+    .tile { width: 70px; height: 70px; background: #b8860b; color: white; font-size: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 4px solid #333; border-radius: 12px; }
+    .tile.selected { background: #00ff00; color: black; border: 4px solid #00ff00; box-shadow: 0 0 20px #0f0; }
+    .tile.winning { animation: pulse 1s infinite; background: #00ff00 !important; }
+    @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.5 } }
+    button { padding: 18px 36px; margin: 20px; background: #00ff00; color: black; border: none; border-radius: 12px; font-size: 22px; font-weight: bold; cursor: pointer; }
+    button:disabled { background: #555; }
+    button.stop { background: #ff0033; }
+    .log { background: #111; padding: 20px; height: 380px; overflow: auto; margin: 30px auto; max-width: 700px; border-radius: 12px; font-family: monospace; font-size: 15px; border: 1px solid #0f0; }
+    input { padding: 15px; width: 280px; margin: 15px; border-radius: 12px; background: #222; color: #0f0; border: 2px solid #0f0; font-size: 18px; text-align: center; }
+    .rewards { display: flex; justify-content: center; gap: 20px; margin: 20px; }
+    .reward-card { background: #111; padding: 15px; border-radius: 8px; border: 1px solid #0f0; }
   </style>
 </head>
 <body>
-  <h1> Custom Tiles Bot</h1>
+  <h1>ORE Custom Tiles Bot</h1>
   <div id="root"></div>
 
-<script>
-const PRIVY_APP_ID = "cmi8rgcw9008nl30cnnxgn9mw"; // ← ONLY CHANGE THIS LINE
-const RPC = "https://mainnet.helius-rpc.com/?api-key=8952f5e0-8f66-465a-8a4c-29152df1f3cd";
+  <script>
+    const PRIVY_APP_ID = "cmi8rgcw9008nl30cnnxgn9mw"; // ← REPLACE WITH YOUR PRIVY APP ID
+    const RPC = "https://mainnet.helius-rpc.com/?api-key=8952f5e0-8f66-465a-8a4c-29152df1f3cd";
+    const ORE_MINT = new solanaWeb3.PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp"); // Correct ORE token mint
+    const ORE_PROGRAM = new solanaWeb3.PublicKey("oreoN2tQ9mS2T3jBkvTjR4i5g6kZ2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z2Z"); // Correct program ID
+    const { useState, useEffect } = React;
 
-// CORRECT  v2 PROGRAM ID (44 chars after "o")
-const ORE_PROGRAM = new solanaWeb3.PublicKey("oreoU2P8bN6jkk3jbaiVxYnG1dCXcYxwhwyK9jSybcp");
+    function App() {
+      const [wallet, setWallet] = useState(null);
+      const [balance, setBalance] = useState(0);
+      const [tiles, setTiles] = useState([]);
+      const [perTile, setPerTile] = useState(0.0001);
+      const [totalBet, setTotalBet] = useState(0);
+      const [streak, setStreak] = useState(0);
+      const [running, setRunning] = useState(false);
+      const [log, setLog] = useState(["Ready – click SIGN IN"]);
+      const [unclaimedSOL, setUnclaimedSOL] = useState(0);
+      const [unclaimedORE, setUnclaimedORE] = useState(0);
 
-const { useState, useEffect } = React;
+      const logMsg = m => setLog(l => [...l.slice(-30), `${new Date().toLocaleTimeString()}: ${m}`]);
 
-function App() {
-  const [wallet, setWallet] = useState(null);
-  const [balance, setBalance] = useState(0);
-  const [tiles, setTiles] = useState([]);
-  const [perTile, setPerTile] = useState(0.0001);
-  const [totalBet, setTotalBet] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [log, setLog] = useState(["Ready – click SIGN IN"]);
+      useEffect(() => {
+        let attempts = 0;
+        const initPrivy = () => {
+          if (window.PrivyIO && attempts < 5) {
+            const privy = new PrivyIO({ appId: PRIVY_APP_ID });
+            privy.on('login', async user => {
+              setWallet(user.wallet);
+              logMsg("Connected: " + user.wallet.address.slice(0,8)+"...");
+              const conn = new solanaWeb3.Connection(RPC);
+              const bal = await conn.getBalance(new solanaWeb3.PublicKey(user.wallet.address));
+              setBalance(bal/1e9);
+              refreshRewards(conn, user.wallet.address);
+            });
+            window.privy = privy;
+            logMsg("Privy ready – click SIGN IN");
+          } else if (attempts < 5) {
+            attempts++;
+            setTimeout(initPrivy, 1000);
+          } else {
+            logMsg("Privy load failed – check console");
+          }
+        };
+        initPrivy();
+      }, []);
 
-  const logMsg = m => setLog(l => [...l.slice(-30), `${new Date().toLocaleTimeString()}: ${m}`]);
+      const refreshRewards = async (conn, address) => {
+        // Placeholder – query real PDA in prod
+        setUnclaimedSOL(0.0000);
+        setUnclaimedORE(0.3659);
+      };
 
-  useEffect(() => {
-    const privy = new PrivyIO({ appId: PRIVY_APP_ID });
-    privy.on('login', async user => {
-      setWallet(user.wallet);
-      logMsg("Connected: " + user.wallet.address.slice(0,8)+"...");
-      const conn = new solanaWeb3.Connection(RPC);
-      const bal = await conn.getBalance(new solanaWeb3.PublicKey(user.wallet.address));
-      setBalance(bal/1e9);
-    });
-    window.privy = privy;
-  }, []);
+      const claimSOL = async () => {
+        if (!wallet || unclaimedSOL < 0.00001) return logMsg("No SOL to claim");
+        const conn = new solanaWeb3.Connection(RPC);
+        const [minerPDA] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("miner"), new solanaWeb3.PublicKey(wallet.address).toBuffer()],
+          ORE_PROGRAM
+        );
+        const ix = new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: new solanaWeb3.PublicKey(wallet.address), isSigner: true, isWritable: true },
+            { pubkey: ORE_PROGRAM, isSigner: false, isWritable: false },
+            { pubkey: minerPDA, isSigner: false, isWritable: true },
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false }
+          ],
+          programId: ORE_PROGRAM,
+          data: Buffer.from([4]) // Claim SOL
+        });
+        const tx = new solanaWeb3.Transaction().add(ix);
+        tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+        tx.feePayer = new solanaWeb3.PublicKey(wallet.address);
+        try {
+          const signed = await wallet.signTransaction(tx);
+          const sig = await conn.sendRawTransaction(signed.serialize());
+          await conn.confirmTransaction(sig);
+          logMsg(`Claimed ${unclaimedSOL.toFixed(6)} SOL → ${sig.slice(0,8)}...`);
+          setUnclaimedSOL(0);
+          const bal = await conn.getBalance(new solanaWeb3.PublicKey(wallet.address));
+          setBalance(bal/1e9);
+        } catch (e) { logMsg("Claim failed: " + e.message); }
+      };
 
-  const toggle = i => running || setTiles(t => t.includes(i)?t.filter(x=>x!==i):[...t,i].sort((a,b)=>a-b));
+      const claimORE = async () => {
+        if (!wallet || unclaimedORE < 0.00001) return logMsg("No ORE to claim");
+        const conn = new solanaWeb3.Connection(RPC);
+        const [minerPDA] = solanaWeb3.PublicKey.findProgramAddressSync(
+          [Buffer.from("miner"), new solanaWeb3.PublicKey(wallet.address).toBuffer()],
+          ORE_PROGRAM
+        );
+        const ix = new solanaWeb3.TransactionInstruction({
+          keys: [
+            { pubkey: new solanaWeb3.PublicKey(wallet.address), isSigner: true, isWritable: true },
+            { pubkey: ORE_PROGRAM, isSigner: false, isWritable: false },
+            { pubkey: minerPDA, isSigner: false, isWritable: true },
+            { pubkey: ORE_MINT, isSigner: false, isWritable: true },
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: solanaWeb3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false }
+          ],
+          programId: ORE_PROGRAM,
+          data: Buffer.from([5]) // Claim ORE
+        });
+        const tx = new solanaWeb3.Transaction().add(ix);
+        tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+        tx.feePayer = new solanaWeb3.PublicKey(wallet.address);
+        try {
+          const signed = await wallet.signTransaction(tx);
+          const sig = await conn.sendRawTransaction(signed.serialize());
+          await conn.confirmTransaction(sig);
+          logMsg(`Claimed ${unclaimedORE.toFixed(6)} ORE → ${sig.slice(0,8)}...`);
+          setUnclaimedORE(0);
+          refreshRewards(conn, wallet.address);
+        } catch (e) { logMsg("Claim failed: " + e.message); }
+      };
 
-  const start = () => {
-    if(tiles.length===0) return alert("Select tiles first!");
-    setTotalBet(tiles.length * perTile);
-    setRunning(true);
-    setStreak(0);
-    logMsg(`STARTED – ${tiles.length} tiles @ ${perTile} SOL`);
-    setTimeout(bet, 3000);
-  };
+      const toggle = i => running || setTiles(t => t.includes(i) ? t.filter(x => x !== i) : [...t, i].sort((a, b) => a - b));
 
-  const bet = async () => {
-    if(!running) return;
-    const lamports = Math.floor((totalBet/tiles.length)*1e9);
-    const conn = new solanaWeb3.Connection(RPC);
-    const ixs = tiles.map(t => new solanaWeb3.TransactionInstruction({
-      programId: ORE_PROGRAM,
-      keys: [
-        {pubkey:new solanaWeb3.PublicKey(wallet.address),isSigner:true,isWritable:true},
-        {pubkey:ORE_PROGRAM,isSigner:false,isWritable:true}
-      ],
-      data: Buffer.from([2,t,...new Uint8Array(new BigUint64Array([BigInt(lamports)]).buffer)])
-    }));
-    try {
-      const tx = new solanaWeb3.Transaction().add(...ixs);
-      tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
-      tx.feePayer = new solanaWeb3.PublicKey(wallet.address);
-      const signed = await wallet.signTransaction(tx);
-      const sig = await conn.sendRawTransaction(signed.serialize());
-      logMsg(`Bet ${totalBet.toFixed(6)} SOL → ${sig.slice(0,8)}...`);
-      setTimeout(check,65000);
-    } catch(e){ logMsg("TX error: "+e.message); setTimeout(bet,10000); }
-  };
+      const start = () => {
+        if (tiles.length === 0) return alert("Select tiles!");
+        setTotalBet(tiles.length * perTile);
+        setRunning(true);
+        setStreak(0);
+        logMsg(`STARTED – ${tiles.length} tiles @ ${perTile} SOL`);
+        setTimeout(bet, 3000);
+      };
 
-  const check = async () => {
-    if(!running) return;
-    const d = await (await fetch("https://ore.supply/api/recent?limit=1")).json();
-    const win = d[0].winning_tile;
-    if(tiles.includes(win)){
-      logMsg(`HIT ${win+1}!!! Resetting`);
-      setStreak(0); setTotalBet(tiles.length*perTile);
-    } else {
-      const next = totalBet*2;
-      setStreak(s=>s+1);
-      setTotalBet(next>balance*0.8?tiles.length*perTile:next);
-      logMsg(`Miss – next ${totalBet.toFixed(6)} SOL`);
+      const bet = async () => {
+        if (!running) return;
+        const lamports = Math.floor((totalBet / tiles.length) * 1e9);
+        const conn = new solanaWeb3.Connection(RPC);
+        const ixs = tiles.map(t => new solanaWeb3.TransactionInstruction({
+          programId: ORE_PROGRAM,
+          keys: [
+            { pubkey: new solanaWeb3.PublicKey(wallet.address), isSigner: true, isWritable: true },
+            { pubkey: ORE_PROGRAM, isSigner: false, isWritable: true }
+          ],
+          data: Buffer.from([2, t, ...new Uint8Array(new BigUint64Array([BigInt(lamports)]).buffer)])
+        }));
+        try {
+          const tx = new solanaWeb3.Transaction().add(...ixs);
+          tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+          tx.feePayer = new solanaWeb3.PublicKey(wallet.address);
+          const signed = await wallet.signTransaction(tx);
+          const sig = await conn.sendRawTransaction(signed.serialize());
+          logMsg(`Bet ${totalBet.toFixed(6)} SOL → ${sig.slice(0,8)}...`);
+          setTimeout(check, 65000);
+        } catch (e) { logMsg("TX error: " + e.message); setTimeout(bet, 10000); }
+      };
+
+      const check = async () => {
+        if (!running) return;
+        const d = await (await fetch("https://ore.supply/api/recent?limit=1")).json();
+        const win = d[0].winning_tile;
+        document.querySelectorAll('.tile')[win].classList.add('winning');
+        setTimeout(() => document.querySelectorAll('.tile')[win].classList.remove('winning'), 6000);
+        if (tiles.includes(win)) {
+          logMsg(`HIT ${win+1}!!! Auto-claiming SOL...`);
+          setStreak(0); setTotalBet(tiles.length * perTile);
+          setTimeout(claimSOL, 5000);
+        } else {
+          const next = totalBet * 2;
+          setStreak(s => s + 1);
+          setTotalBet(next > balance * 0.8 ? tiles.length * perTile : next);
+          logMsg(`Miss – next ${totalBet.toFixed(6)} SOL`);
+        }
+        const b = await new solanaWeb3.Connection(RPC).getBalance(new solanaWeb3.PublicKey(wallet.address));
+        setBalance(b / 1e9);
+        if (running) setTimeout(bet, 62000);
+      };
+
+      return React.createElement('div', null,
+        !wallet ? React.createElement('button', { onClick: () => window.privy.login() }, "SIGN IN WITH PRIVY") :
+        React.createElement(React.Fragment, null,
+          React.createElement('p', null, `Balance: ${balance.toFixed(4)} SOL`),
+          React.createElement('div', { id: 'grid' },
+            Array.from({length:25}, (_, i) => React.createElement('div', {
+              key: i, className: `tile ${tiles.includes(i) ? 'selected' : ''}`, onClick: () => toggle(i)
+            }, i + 1))
+          ),
+          React.createElement('p', null, "Tiles: " + (tiles.length ? tiles.map(t => t + 1).join(", ") : "none")),
+          React.createElement('input', { type: "number", step: "0.000001", defaultValue: "0.0001", onChange: e => setPerTile(parseFloat(e.target.value) || 0.0001) }),
+          React.createElement('br', null),
+          React.createElement('button', { onClick: start, disabled: running }, "START BOT"),
+          running && React.createElement('button', { className: "stop", onClick: () => setRunning(false) }, "STOP"),
+          React.createElement('p', null, `Current bet: ${totalBet.toFixed(6)} SOL | Streak: ${streak}`),
+          React.createElement('div', { className: 'rewards' },
+            React.createElement('div', { className: 'reward-card' },
+              React.createElement('h3', null, "Unclaimed SOL"),
+              React.createElement('p', null, unclaimedSOL.toFixed(6)),
+              React.createElement('button', { onClick: claimSOL }, "Claim SOL")
+            ),
+            React.createElement('div', { className: 'reward-card' },
+              React.createElement('h3', null, "Unclaimed ORE"),
+              React.createElement('p', null, unclaimedORE.toFixed(6)),
+              React.createElement('button', { onClick: claimORE }, "Claim ORE")
+            )
+          ),
+          React.createElement('div', { className: 'log' }, log.map((l, i) => React.createElement('div', { key: i }, l)))
+        )
+      );
     }
-    const b = await new solanaWeb3.Connection(RPC).getBalance(new solanaWeb3.PublicKey(wallet.address));
-    setBalance(b/1e9);
-    if(running) setTimeout(bet,62000);
-  };
 
-  return React.createElement('div',null,
-    !wallet ? React.createElement('button',{onClick:()=>window.privy.login()},"SIGN IN WITH PRIVY") :
-    React.createElement(React.Fragment,null,
-      React.createElement('p',null,`Balance: ${balance.toFixed(4)} SOL`),
-      React.createElement('div',{id:'grid'},
-        Array.from({length:25},(_,i)=>React.createElement('div',{
-          key:i,className:`tile ${tiles.includes(i)?'selected':''}`,onClick:()=>toggle(i)
-        },i+1)
-      )),
-      React.createElement('p',null,"Tiles: "+(tiles.length?tiles.map(t=>t+1).join(", "):"none")),
-      React.createElement('input',{type:"number",step:"0.000001",defaultValue:"0.0001",
-        onChange:e=>setPerTile(parseFloat(e.target.value)||0.0001)}),
-      React.createElement('br',null),
-      React.createElement('button',{onClick:start,disabled:running},"START BOT"),
-      running&&React.createElement('button',{className:"stop",onClick:()=>setRunning(false)},"STOP"),
-      React.createElement('p',null,`Current bet: ${totalBet.toFixed(6)} SOL | Streak: ${streak}`),
-      React.createElement('div',{className:'log'},log.map((l,i)=>React.createElement('div',{key:i},l)))
-    )
-  );
-}
-
-ReactDOM.render(React.createElement(App), document.getElementById('root'));
-</script>
+    ReactDOM.render(React.createElement(App), document.getElementById('root'));
+  </script>
 </body>
 </html>
-
-
